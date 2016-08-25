@@ -1,0 +1,11 @@
+---
+- hosts: all
+  tasks:
+    - name: create a directory
+      file:
+        path: '/root/this out/yahear'
+        state: directory
+    - name: install cpanm
+      pacman:
+        name: cpanminus
+        state: present
