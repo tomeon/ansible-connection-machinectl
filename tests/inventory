@@ -8,5 +8,8 @@ archlinux-ansible
 local
 nspawn
 
+[nspawn:vars]
+ansible_connection = machinectl
+
 [arch:vars]
 ansible_python_interpreter = /usr/bin/python2
