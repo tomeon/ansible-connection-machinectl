@@ -1,5 +1,16 @@
-# Inspired by, but since deviated entirely from, the nsenter connection by
-# Tomohiro NAKAMURA
+# Inspired by, but since deviated entirely from, the nsenter connection plugin
+# (c) 2015, Tomohiro NAKAMURA <quickness.net@gmail.com>
+# Permalink: https://github.com/jptomo/ansible-connection-nsenter/blob/4ab713b061c92eaf2553a5c826cd26266e932b09/nsenter.py
+#
+# The polling loop in Connection.exec_command was adapted from local.py
+# (c) 2012, Michael DeHaan <michael.dehaan@gmail.com>
+# (c) 2015 Toshio Kuratomi <tkuratomi@ansible.com>
+# Permalink: https://github.com/ansible/ansible/blob/a9d5bf717c200126c46433de1a833f2dd34397f6/lib/ansible/plugins/connection/ssh.py#L332-L340
+#
+# The pty.getpty() code in Connection.exec_command was adapated from ssh.py
+# (c) 2012, Michael DeHaan <michael.dehaan@gmail.com>
+# Copyright 2015 Abhijit Menon-Sen <ams@2ndQuadrant.com>
+# Permalink: https://github.com/ansible/ansible/blob/a9d5bf717c200126c46433de1a833f2dd34397f6/lib/ansible/plugins/connection/ssh.py#L332-L340
 #
 # Connection plugin for machinectl virtual machines and containers
 # (c) 2016, Matt Schreiber <schreibah@gmail.com>
