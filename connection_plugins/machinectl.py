@@ -195,7 +195,7 @@ class Connection(ConnectionBase):
         super(Connection, self).__init__(play_context, new_stdin, *args, **kwargs)
 
         if os.geteuid() != 0:
-            raise errors.AnsibleError('machinectl connection requires running as root')
+            raise AnsibleError('machinectl connection requires running as root')
 
         self.machinectl = MachineCtl(kwargs.get('machinectl_command'))
         self.remote_uid = None
@@ -356,6 +356,7 @@ class Connection(ConnectionBase):
         if in_data is not None:
             raise AnsibleError('the machinectl connection cannot perform pipelining')
 
+        opts = []
         # --uid only recognized with `shell' subcommand
         if self.remote_uid is not None:
             display.vvv(u'RUN AS {0} (UID {1})'.format(self._play_context.remote_user, self.remote_uid))
