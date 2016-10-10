@@ -15,10 +15,10 @@
 # Connection plugin for machinectl virtual machines and containers
 # (c) 2016, Matt Schreiber <schreibah@gmail.com>
 #
-# machinectl is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# This machinectl connection plugin is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
@@ -60,13 +60,13 @@ class MachineCtl(object):
     # https://github.com/systemd/systemd/issues/2420
     MACHINECTL_GETOPT_FIX_VERSION = '230'
 
-    def __init__(self, machinectl_command=None, **kwargs):
-        if machinectl_command is not None:
-            self.command = kwargs['machinectl_command']
+    def __init__(self, command=None):
+        if command is not None:
+            self.command = command
         else:
             self.command = distutils.spawn.find_executable('machinectl')
             if not self.command:
-                raise AnsibleError('machinectl command not found in PATH')
+                raise AnsibleError('machinectl executable not found in PATH')
 
         self.version = self._version()
 
