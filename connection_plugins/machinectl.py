@@ -158,7 +158,7 @@ class MachineCtl(object):
         input, standard output, or standard error, but does recognize the
         additional argument ``in_data``.
 
-        :kwarg in_data:
+        :kwarg in_data: byte string fed to opened process' stdin
         '''
 
         p = self.popen_command(action, opts=opts, args=args, machine=machine)
@@ -373,7 +373,7 @@ class Connection(ConnectionBase):
         os.close(slave)
         stdin = os.fdopen(master, 'wb', 0)
 
-        ## SSH state machine
+        ## State machine
         #
         # Now we read and accumulate output from the running process until it
         # exits. Depending on the circumstances, we may also need to write an
@@ -581,6 +581,7 @@ class Connection(ConnectionBase):
 
     def fetch_file(self, in_path, out_path):
         super(Connection, self).put_file(in_path, out_path)
+
         display.vvv(u'FETCH {0} TO {1}'.format(in_path, out_path), host=self.machine)
 
         in_path = self._prefix_login_path(in_path)
@@ -598,4 +599,3 @@ class Connection(ConnectionBase):
                 os.chown(out_path, os.geteuid(), os.getegid() or -1)
         except OSError:
             raise AnsibleError('failed to change ownership on file {0} to user {1}'.format(out_path, os.getlogin()))
-

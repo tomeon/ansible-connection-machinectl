@@ -69,4 +69,4 @@ $ sudo -E ansible -c machinectl -m setup <target-machine>
 License
 -------
 
-BSD
+MIT
