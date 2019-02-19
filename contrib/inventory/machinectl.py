@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 
 # Dynamic inventory for machinectl virtual machines and containers
 # (c) 2016, Matt Schreiber <schreibah@gmail.com>
