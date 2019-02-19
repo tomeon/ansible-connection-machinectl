@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+TEST_DIR=''
+
+if (( $# > 0 )); then
+    TEST_DIR="$1"
+    shift
+else
+    TEST_DIR="$(readlink -f "${BASH_SOURCE[0]%/*}/..")"
+fi
+
+cd "$TEST_DIR"
+
+exec tox "$@"

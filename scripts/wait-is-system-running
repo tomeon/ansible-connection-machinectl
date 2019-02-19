@@ -1,0 +1,26 @@
+#!/bin/sh
+
+set -eu
+
+state=''
+
+# If this bails, systemctl is-system-running doesn't support --wait (new in
+# 240)
+if ! state="$(systemctl --wait is-system-running)"; then
+    case "$state" in
+        initializing|starting)
+            until state="$(systemctl is-system-running)"; do
+                case "$state" in
+                    initializing|starting)
+                        sleep 5
+                        ;;
+                    *)
+                        break
+                        ;;
+                esac
+            done
+            ;;
+    esac
+fi
+
+echo "$state"

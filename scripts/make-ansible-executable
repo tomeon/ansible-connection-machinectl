@@ -1,0 +1,17 @@
+#!/bin/sh
+
+set -eu
+
+for bindir in "$@"; do
+    [ -d "$bindir" ] || continue
+
+    for ansible_util in "${bindir}/ansible"*; do
+        if [ "$ansible_util" = "${bindir}/ansible*" ]; then
+            continue 2
+        else
+            break
+        fi
+    done
+
+    chmod +x "${bindir}/ansible"*
+done

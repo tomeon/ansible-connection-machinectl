@@ -1,0 +1,44 @@
+#!/bin/sh
+
+# Writes out /etc/docker/daemon.json and restarts the Docker service if the
+# daemon configuration has changed
+
+set -eu
+
+files_identical() {
+    [ -e "${1:?whoopsie}" ] && [ -e "${2:?oh no}" ] \
+        && [ "$(md5sum "$1" | awk '{print $1}')" = "$(md5sum "$2" | awk '{print $1}')" ]
+}
+
+sd_booted() {
+    [ -d /run/systemd/system ] && ! [ -L /run/systemd/system ] \
+        && { command -v systemctl && systemctl is-system-running ; } 1>/dev/null 2>&1
+}
+
+if [ $# -gt 0 ]; then
+    tmpfile="$(mktemp --tmpdir= "${0##*/}.daemon.json.XXXXXXXXXXX")"
+    echo "$1" > "$tmpfile"
+
+    if ! [ -e /etc/docker/daemon.json ] || ! files_identical "$tmpfile" /etc/docker/daemon.json; then
+        install -dm0700 --owner root --group root /etc/docker
+        mv "$tmpfile" /etc/docker/daemon.json
+        chmod 0600 /etc/docker/daemon.json
+
+        if sd_booted; then
+            systemctl restart docker
+        elif command -v service 1>/dev/null 2>&1; then
+            service docker restart
+        fi
+
+    fi
+fi
+
+if sd_booted; then
+    if ! systemctl is-active docker 1>/dev/null; then
+        systemctl start docker
+    fi
+elif ! docker run hello-world 1>/dev/null 2>&1; then
+    service docker start
+fi
+
+exec docker run hello-world 1>/dev/null

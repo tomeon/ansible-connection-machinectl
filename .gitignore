@@ -56,6 +56,9 @@ docs/_build/
 # PyBuilder
 target/
 
+# Vagrant data
+/.vagrant/
+
 # mkosi stuff
 /mkosi/mkosi.cache/
 /mkosi/mkosi.output/

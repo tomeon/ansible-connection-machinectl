@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+status=0
+
+for volume in "$@"; do
+    tmpfile_src='' tmpfile_dest=''
+
+    if tmpfile_src="$(mktemp --tmpdir="$volume" link-probe-src.XXXXXXXXXX)" && tmpfile_dest="$(mktemp -u --tmpdir="$volume" link-probe-dest.XXXXXXXXXX)"; then
+        if ! ln "$tmpfile_src" "$tmpfile_dest"; then
+            status=1
+        fi
+
+        rm -f "${tmpfile_src:?whoopsie}" "${tmpfile_dest:?oh no}"
+    else
+        status=1
+    fi
+done
+
+exit "$status"

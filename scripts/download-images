@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if (( $# < 1 )); then
+    printf 1>&2 -- 'Usage: %s IMAGE1 [IMAGE2 ...]\n' "${BASH_SOURCE[0]##*/}"
+    exit 1
+fi
+
+export IMAGE_BASEURL="${IMAGE_BASEURL:-https://baxterstockman.keybase.pub/osi}"
+
+in_parallel() {
+    parallel --tag --line-buffer --halt now,fail=1 "$@"
+}
+
+_pull_tar() {
+    image="${1?:ouch}"
+    image="${image##*/}"
+    machinectl pull-tar --verify=no --force "${IMAGE_BASEURL}/${image}/${image}.tar.xz"
+}
+
+pull_tar_parallel() {
+    export -f _pull_tar
+    in_parallel _pull_tar {} ::: "$@"
+}
+
+pull_tar_loop() {
+    for image in "$@"; do
+        _pull_tar "${image##*/}"
+    done
+}
+
+_import_tar() {
+    image="${1?:ouch}"
+    image="${image##*/}"
+    image_basename="${image##*/}.tar.xz"
+    curl -fLO "${IMAGE_BASEURL}/${image##*/}/${image##*/}.tar.xz"
+    machinectl import-tar --verify=no --force "$image_basename"
+}
+
+import_tar_parallel() {
+    export -f _import_tar
+    in_parallel _import_tar {} ::: "$@"
+}
+
+import_tar_loop() {
+    for image in "$@"; do
+        _import_tar "${image##*/}"
+    done
+}
+
+if command -v parallel &>/dev/null; then
+    pull_tar=pull_tar_parallel
+    import_tar=import_tar_parallel
+else
+    pull_tar=pull_tar_loop
+    import_tar=import_tar_loop
+fi
+
+wanted_images=("${@##*/}")
+
+declare -A have_images=()
+while read -r image _; do
+    have_images[$image]=1
+done < <(machinectl --no-pager --no-legend list-images)
+
+needed_images=()
+for image in "${wanted_images[@]}"; do
+    if [[ "${have_images[$image]:-0}" != 1 ]]; then
+        needed_images+=("$image")
+    fi
+done
+
+set -- "${needed_images[@]}"
+
+if (( $# < 1 )); then
+    printf 1>&2 -- 'Already have all images: %s\n' "${wanted_images[*]}"
+    exit
+fi
+
+first="$1"
+shift || :
+
+if "$pull_tar" "$first"; then
+    "$pull_tar" "$@"
+else
+    "$import_tar" "$first" "$@"
+fi
+
+have_images=()
+while read -r image _; do
+    have_images[$image]=1
+done < <(machinectl --no-pager --no-legend list-images)
+
+needed_images=()
+for image in "${wanted_images[@]}"; do
+    if [[ "${have_images[$image]:-0}" != 1 ]]; then
+        needed_images+=("$image")
+    fi
+done
+
+if (( ${#needed_images[@]} > 0 )); then
+    echo 1>&2 "Failed to pull images: ${needed_images[*]}"
+    exit 1
+fi
