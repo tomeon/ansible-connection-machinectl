@@ -60,3 +60,6 @@ target/
 /mkosi/mkosi.cache/
 /mkosi/mkosi.output/
 *.mkosi
+
+# dobi stuff
+/.dobi/

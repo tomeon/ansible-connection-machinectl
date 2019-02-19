@@ -1,0 +1,84 @@
+meta:
+    project: ansible-connection-machinectl
+    default: all
+
+env=fedora-release:
+    variables:
+        - FEDORA_RELEASE=29
+        - HUB_USERNAME=tomeon
+
+image=base:
+    image: '{env.HUB_USERNAME}/fedora-mkosi'
+    context: 'docker'
+    dockerfile: 'Dockerfile.base'
+    pull-base-image-on-build: true
+    args: &BASE_ARGS
+        FEDORA_RELEASE: '{env.FEDORA_RELEASE:29}'
+    depends:
+        - 'fedora-release'
+    tags:
+        - '{env.FEDORA_RELEASE}'
+
+image=master:
+    image: '{env.HUB_USERNAME}/fedora-mkosi'
+    context: 'docker'
+    dockerfile: 'Dockerfile.master'
+    tags:
+        - '{env.FEDORA_RELEASE}-master'
+    depends:
+        - 'base'
+        - 'fedora-release'
+    args:
+        <<: *BASE_ARGS
+
+image=tox:
+    image: '{env.HUB_USERNAME}/fedora-mkosi'
+    context: 'docker'
+    dockerfile: 'Dockerfile.tox'
+    tags:
+        - '{env.FEDORA_RELEASE}-tox'
+    depends:
+        - 'master'
+        - 'fedora-release'
+    args:
+        <<: *BASE_ARGS
+
+image=travis:
+    image: '{env.HUB_USERNAME}/fedora-mkosi'
+    context: 'docker'
+    dockerfile: 'Dockerfile.travis'
+    tags:
+        - '{env.FEDORA_RELEASE}-travis'
+    depends:
+        - 'tox'
+        - 'fedora-release'
+    args:
+        <<: *BASE_ARGS
+
+image=vagrant:
+    image: '{env.HUB_USERNAME}/fedora-mkosi'
+    context: 'docker'
+    dockerfile: 'Dockerfile.vagrant'
+    tags:
+        - '{env.FEDORA_RELEASE}-vagrant'
+    depends:
+        - 'tox'
+        - 'fedora-release'
+    args:
+        <<: *BASE_ARGS
+
+alias=push:
+    tasks:
+        - 'base:push'
+        - 'master:push'
+        - 'tox:push'
+        - 'travis:push'
+        - 'vagrant:push'
+
+alias=all:
+    tasks:
+        - 'base'
+        - 'master'
+        - 'tox'
+        - 'travis'
+        - 'vagrant'
