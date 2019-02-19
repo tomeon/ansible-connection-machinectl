@@ -372,7 +372,7 @@ class Connection(ConnectionBase):
                                           machine=self.machine, stdin=slave)
 
         os.close(slave)
-        stdin = os.fdopen(master, 'w', 0)
+        stdin = os.fdopen(master, 'wb', 0)
 
         ## SSH state machine
         #
@@ -448,14 +448,14 @@ class Connection(ConnectionBase):
             # listening to the pipe if it's been closed.
 
             if p.stdout in rfd:
-                chunk = p.stdout.read()
+                chunk = to_native(p.stdout.read())
                 if chunk == '':
                     rpipes.remove(p.stdout)
                 tmp_stdout += chunk
                 display.debug("stdout chunk (state=%s):\n>>>%s<<<\n" % (state, chunk))
 
             if p.stderr in rfd:
-                chunk = p.stderr.read()
+                chunk = to_native(p.stderr.read())
                 if chunk == '':
                     rpipes.remove(p.stderr)
                 tmp_stderr += chunk
