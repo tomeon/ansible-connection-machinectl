@@ -170,7 +170,7 @@ class MachineCtl(object):
         returncode, stdout, stderr = self.run_command('list', opts=['--no-legend'])
 
         for i in to_native(stdout.strip()).splitlines():
-            yield re.split(r'\s+', i, 3)
+            yield re.split(r'\s+', i)
 
     def show(self, machine=None, *args):
         ''' Yields machine properties in key-value pairs '''
