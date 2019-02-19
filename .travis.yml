@@ -1,29 +1,45 @@
 ---
-language: python
-python: "2.7"
+# Shiny!
+dist: xenial
 
-# Use the new container infrastructure
-sudo: false
+# Use full VM, as we need the ability to run containers in --privileged mode
+sudo: required
 
-# Install ansible
-addons:
-  apt:
-    packages:
-    - python-pip
+# Just need to be able to run Docker (plus some shell scripts); everything else
+# happens in containers.
+language: minimal
+
+env:
+  global:
+    - IMAGE=tomeon/fedora-mkosi:29-travis
+    - CONTAINER="fedora-mkosi-29-travis-python-${TRAVIS_PYTHON_VERSION}"
+    - TRAVIS_BUILD_DIR_BIND_DEST=/vagrant
+  matrix:
+    - ANSIBLE=2.4
+    - ANSIBLE=2.5
+    - ANSIBLE=2.6
+    - ANSIBLE=2.7
+
+services:
+  - docker
+
+before_install:
+  - 'sudo "${TRAVIS_BUILD_DIR}/scripts/configure-docker"'
+  - 'docker pull "$IMAGE"'
+  - '"${TRAVIS_BUILD_DIR}/scripts/docker-run-travis-container" --name "$CONTAINER" "$IMAGE"'
+  - 'docker exec "$CONTAINER" printenv | sort'
+  - 'docker exec "$CONTAINER" "${TRAVIS_BUILD_DIR_BIND_DEST}/scripts/wait-is-system-running"'
+  - 'docker exec "$CONTAINER" systemctl list-units "*machine*"'
+  - 'docker exec "$CONTAINER" systemctl start systemd-machined'
+  - 'docker exec "$CONTAINER" systemctl list-units "*machine*"'
+  - 'docker exec "$CONTAINER" "${TRAVIS_BUILD_DIR_BIND_DEST}/scripts/resize-machine-btrfs-partition"'
 
 install:
-  # Install ansible
-  - pip install ansible
-
-  # Check ansible version
-  - ansible --version
-
-  # Create ansible.cfg with correct roles_path
-  - printf '[defaults]\nroles_path=../' >ansible.cfg
+  - 'docker exec "$CONTAINER" "${TRAVIS_BUILD_DIR_BIND_DEST}/scripts/download-images" arch bionic fedora stretch xenial'
+  - 'docker exec "$CONTAINER" "${TRAVIS_BUILD_DIR_BIND_DEST}/scripts/spawn-containers"'
 
 script:
-  # Basic role syntax check
-  - ansible-playbook tests/test.yml -i tests/inventory --syntax-check
+  - 'docker exec "$CONTAINER" "${TRAVIS_BUILD_DIR_BIND_DEST}/scripts/run-tests" "$TRAVIS_BUILD_DIR_BIND_DEST"'
 
 notifications:
   webhooks: https://galaxy.ansible.com/api/v1/notifications/
