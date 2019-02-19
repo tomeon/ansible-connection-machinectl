@@ -22,7 +22,7 @@ machinectl = MachineCtl()
 result = {}
 result['all'] = {}
 result['all']['hosts'] = [m for m in machinectl.list()]
-result['all']['vars'] = dict(machinectl.show())
+result['all']['vars'] = {'machined_config': dict(machinectl.show())}
 result['all']['vars']['ansible_connection'] = MachineCtlConnection.transport
 
 
