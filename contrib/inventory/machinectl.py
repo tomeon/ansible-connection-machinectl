@@ -14,7 +14,6 @@
 from connection_plugins.machinectl import MachineCtl
 from connection_plugins.machinectl import Connection as MachineCtlConnection
 
-import re
 import sys
 import json
 
