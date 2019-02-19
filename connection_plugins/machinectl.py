@@ -59,7 +59,6 @@ class MachineCtl(object):
     # `man 1 systemd'.
     SYSTEMD_LOG_LEVEL = 'notice'
 
-
     # Prior to version 230, `machinectl' consumed all flags in the `shell'
     # invocation, including those intended for the executed command.  See:
     # https://github.com/systemd/systemd/issues/2420
