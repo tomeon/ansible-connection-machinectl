@@ -1,0 +1,18 @@
+[Distribution]
+Distribution = ubuntu
+Release = xenial
+
+[Output]
+Output = xenial.tar.xz
+OutputDirectory = mkosi.output/xenial
+Format = tar
+Bootable = no
+
+[Partitions]
+RootSize = 300M
+
+[Packages]
+Packages = python3 python dbus
+
+[Validation]
+CheckSum = yes

@@ -1,0 +1,18 @@
+[Distribution]
+Distribution = debian
+Release = stretch
+
+[Output]
+Output = stretch.tar.xz
+OutputDirectory = mkosi.output/stretch
+Format = tar
+Bootable = no
+
+[Partitions]
+RootSize = 300M
+
+[Packages]
+Packages = python3 python dbus
+
+[Validation]
+CheckSum = yes

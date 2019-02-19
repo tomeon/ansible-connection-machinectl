@@ -1,0 +1,3 @@
+[Exec]
+# See https://github.com/systemd/systemd/issues/9563#issuecomment-415241310
+Parameters=systemd.legacy_systemd_cgroup_controller=yes
