@@ -24,11 +24,12 @@ result['all'] = {}
 result['all']['hosts'] = [m[0] for m in machinectl.list()]
 result['all']['vars'] = {'machined_config': dict(machinectl.show())}
 result['all']['vars']['ansible_connection'] = MachineCtlConnection.transport
+result['_meta'] = {'hostvars': {mn: {'machine_config': dict(machinectl.show(mn))} for mn in result['all']['hosts']}}
 
 
 if len(sys.argv) == 2 and sys.argv[1] == '--list':
     print(json.dumps(result))
 elif len(sys.argv) == 3 and sys.argv[1] == '--host':
-    print(json.dumps({'ansible_connection': MachineCtlConnection.transport}))
+    print(json.dumps(result['_meta']['hostvars'].get(sys.argv[2], {})))
 else:
     print("Need an argument, either --list or --host <host>")
