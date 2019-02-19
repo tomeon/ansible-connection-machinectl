@@ -40,9 +40,10 @@ from ansible.plugins.connection import ConnectionBase
 from ansible.utils.vars import merge_hash
 
 try:
-    from ansible.module_utils._text import to_bytes
+    from ansible.module_utils._text import to_bytes, to_native
 except ImportError:
     from ansible.utils.unicode import to_bytes
+    from ansible.utils.unicode import to_str as to_native
 
 try:
     from __main__ import display
@@ -88,7 +89,7 @@ class MachineCtl(object):
 
         try:
             version_output = subprocess.check_output([self.command, '--version'])
-            matched = re.match(r'\Asystemd\s+(\d+)\D', version_output)
+            matched = re.match(r'\Asystemd\s+(\d+)\D', to_native(version_output))
             return (matched.groups())[0]
         except subprocess.CalledProcessError as e:
             raise AnsibleError('failed to retrieve machinectl version: {0}'.format(e.message))
@@ -169,14 +170,14 @@ class MachineCtl(object):
         ''' Returns a list of machine names '''
         returncode, stdout, stderr = self.run_command('list', opts=['--no-legend'])
 
-        for i in stdout.strip().splitlines():
+        for i in to_native(stdout.strip()).splitlines():
             yield re.split(r'\s+', i, 3)
 
     def show(self, machine=None, *args):
         ''' Yields machine properties in key-value pairs '''
         returncode, stdout, stderr = self.run_command('show', machine=machine)
 
-        for line in stdout.splitlines():
+        for line in to_native(stdout).splitlines():
             yield line.strip().split('=', 2)
 
 
