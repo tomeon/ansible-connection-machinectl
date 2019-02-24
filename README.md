@@ -18,7 +18,7 @@ Installation
 ------------
 
 This plugin can be installed by running `ansible-galaxy install
-tomeon.ansible_connection_machinectl`,` or by directly cloning this repository.
+tomeon.ansible_connection_machinectl`, or by directly cloning this repository.
 You will need to move
 [`connection_plugins/machinectl.py`](connection_plugins/machinectl.py) into one
 of the `connection_plugins` directories configured in your `ansible.cfg`.
