@@ -35,8 +35,7 @@ before_install:
   - 'docker exec "$CONTAINER" "${TRAVIS_BUILD_DIR_BIND_DEST}/scripts/resize-machine-btrfs-partition"'
 
 install:
-  - 'docker exec "$CONTAINER" "${TRAVIS_BUILD_DIR_BIND_DEST}/scripts/download-images" arch bionic fedora stretch xenial'
-  - 'docker exec "$CONTAINER" "${TRAVIS_BUILD_DIR_BIND_DEST}/scripts/spawn-containers"'
+  - 'docker exec "$CONTAINER" "${TRAVIS_BUILD_DIR_BIND_DEST}/scripts/download-images-and-spawn-containers"'
 
 script:
   - 'docker exec "$CONTAINER" "${TRAVIS_BUILD_DIR_BIND_DEST}/scripts/run-tests" "$TRAVIS_BUILD_DIR_BIND_DEST"'

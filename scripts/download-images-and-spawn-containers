@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+# Attempts to infer the names of images to download from looping over mkosi.*
+# defaults file names.
+
+set -euo pipefail
+
+looks_like_mkosi_dir() {
+    [[ -d "${1:?whoopsie}" ]] && { [[ -f "${1}/mkosi.default" ]] || [[ -d "${1}/mkosi.files" ]] ; }
+}
+
+if [[ -z "${MKOSI_DIR:-}" ]]; then
+    candidates=()
+    toplevel=''
+
+    if command -v git &>/dev/null && toplevel="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+        candidates+=("${toplevel}/mkosi")
+    fi
+
+    if toplevel="$(readlink -f "${0%/*}/../mkosi")"; then
+        candidates+=("${toplevel}/mkosi")
+    fi
+
+    candidates+=(/vagrant/mkosi /mkosi "$(pwd -P)")
+
+    for candidate in "${candidates[@]}"; do
+        if looks_like_mkosi_dir "$candidate"; then
+            MKOSI_DIR="$candidate"
+            break
+        fi
+    done
+fi
+
+shopt -s nullglob
+
+images=("$@")
+mkosi_files="${MKOSI_DIR:-}/mkosi.files"
+if [[ -n "${MKOSI_DIR:-}" ]] && [[ -d "$mkosi_files" ]]; then
+    for mkosi_defaults in "$mkosi_files"/mkosi.*; do
+        images+=("${mkosi_defaults##*/mkosi.}")
+    done
+fi
+
+dirname="${BASH_SOURCE[0]%/*}"
+
+"${dirname}/download-images" "${images[@]}"
+exec "${dirname}/spawn-containers"
