@@ -15,6 +15,8 @@
 
 ### Changed
 
+- Expand `ansible-galaxy`-based installation instructions, explicitly
+  mentioning the "role" name. (#5)
 - Account for restructuring of Ansible's text-handling libraries by tring to
   import `to_bytes` and `to_native` from `ansible.module_utils._text`, falling
   back to importing `to_bytes` and `to_str` from `ansible.utils.unicode` (and
