@@ -574,13 +574,27 @@ class Connection(ConnectionBase):
         if not os.path.exists(to_bytes(in_path, errors='strict')):
             raise AnsibleFileNotFound('file or module does not exist: {0}'.format(in_path))
 
+        # Okay, this is definitely not a great idea to do, that's pretty ugly,
+        # but we have no choice... Let me explain
+        # You cannot "copy-to --force" with machinectl. There is a request to
+        # do that, but unaddressed as of today:
+        #   https://github.com/systemd/systemd/issues/9441
+        # So you cannot overwrite an existing file. This is very annoying when
+        # pushing DIRECTORIES... as the same ansible file (with the same name
+        # on the remote target) must be overwritten for each file in the
+        # directory.
+        # Without removing the file first, we get an error: "file exists".
+        remove_cmd = self._shell.remove(out_path, recurse=True)
+        remove_sh_cmd = [self._play_context.executable, '-c', remove_cmd]
+        returncode, stdout, stderr = self._run_command('shell', args=remove_sh_cmd, machine=self.machine)
+        if returncode != 0:
+            raise AnsibleError('failed to perform cleanup of file {0}:\n{1}\n{2}'.format(out_path, stdout, stderr))
         returncode, stdout, stderr = self._run_command('copy-to', args=[in_path, out_path], machine=self.machine)
-
         if returncode != 0:
             raise AnsibleError('failed to transfer file {0} to {1}:\n{2}\n{3}'.format(in_path, out_path, stdout, stderr))
 
     def fetch_file(self, in_path, out_path):
-        super(Connection, self).put_file(in_path, out_path)
+        super(Connection, self).fetch_file(in_path, out_path)
         display.vvv(u'FETCH {0} TO {1}'.format(in_path, out_path), host=self.machine)
 
         in_path = self._prefix_login_path(in_path)
