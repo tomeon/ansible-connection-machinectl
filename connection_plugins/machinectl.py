@@ -584,12 +584,12 @@ class Connection(ConnectionBase):
         # on the remote target) must be overwritten for each file in the
         # directory.
         # Without removing the file first, we get an error: "file exists".
-        returncode, stdout, stderr = self._run_command('shell', args=['/bin/sh', '-c', f'rm -rf "{out_path}"'], machine=self.machine)
+        remove_cmd = self._shell.remove(out_path, recurse=True)
+        remove_sh_cmd = [self._play_context.executable, '-c', remove_cmd]
+        returncode, stdout, stderr = self._run_command('shell', args=remove_sh_cmd, machine=self.machine)
         if returncode != 0:
-            raise AnsibleError('failed to perform cleanup of file {0}:\n{2}\n{3}'.format(out_path, stdout, stderr))
-
+            raise AnsibleError('failed to perform cleanup of file {0}:\n{1}\n{2}'.format(out_path, stdout, stderr))
         returncode, stdout, stderr = self._run_command('copy-to', args=[in_path, out_path], machine=self.machine)
-
         if returncode != 0:
             raise AnsibleError('failed to transfer file {0} to {1}:\n{2}\n{3}'.format(in_path, out_path, stdout, stderr))
 
