@@ -19,6 +19,7 @@ env:
     - ANSIBLE=2.5
     - ANSIBLE=2.6
     - ANSIBLE=2.7
+    - ANSIBLE=2.10
 
 services:
   - docker
