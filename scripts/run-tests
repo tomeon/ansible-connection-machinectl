@@ -13,4 +13,31 @@ fi
 
 cd "$TEST_DIR"
 
-exec tox "$@"
+# shellcheck disable=SC2030
+if (! tty || ! read -r -t 1 -n 0) &>/dev/null; then
+    coproc socat PTY,link="${PWD}/tty" OPEN:/dev/null,ignoreeof
+
+    cleanup() {
+        if [[ -n "${COPROC_PID:-}" ]]; then
+            # shellcheck disable=SC2031
+            kill "$COPROC_PID" || printf 1>&2 -- '%s: killing socat failed with exit status "%d"\n' "$0" "$?"
+        fi
+    }
+
+    trap cleanup exit
+
+    for _ in {1..10}; do
+        if [[ -e "${PWD}/tty" ]]; then
+            break
+        fi
+
+        sleep 1
+    done
+
+    # Fails and exits if the TTY does not exist
+    exec 0< "${PWD}/tty"
+
+    tox "$@"
+else
+    exec tox "$@"
+fi
