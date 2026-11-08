@@ -25,6 +25,14 @@ status=0
 
 while :; do
     for machine in "${!pending[@]}"; do
+        if [[ "$machine" != .host ]] && systemctl --quiet is-failed "systemd-nspawn@${machine}.service"; then
+            echo 1>&2 "${machine}: failed to boot"
+            systemctl --no-pager status "systemd-nspawn@${machine}.service" 1>&2
+            status=1
+            unset "pending[$machine]"
+            continue
+        fi
+
         # Prints e.g. "offline" (or nothing) until the machine's bus is up.
         state="$(systemctl --machine="$machine" is-system-running 2>/dev/null)"
 
