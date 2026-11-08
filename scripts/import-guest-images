@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
 # Imports the guest root filesystems built by build-guest-images (DIR/*.tar.gz)
-# as machine images named NAME-RUN_ID, boots them, and waits until they have
-# finished booting.  scripts/remove-guests RUN_ID removes them again, along
+# as machine images named NAME-RUN_ID, in parallel where possible (see
+# scripts/run-parallel), boots them, and waits until they have finished
+# booting.  scripts/remove-guests RUN_ID removes them again, along
 # with any configuration added for them here.  Must be run as root.
 #
 # Usage: import-guest-images RUN_ID DIR
@@ -27,27 +28,18 @@ if (( ${#tarballs[@]} == 0 )); then
     exit 1
 fi
 
-declare -A pids=()
+names=()
+# TARBALL NAME pairs.
+imports=()
 
 for tarball in "${tarballs[@]}"; do
     name="${tarball##*/}"
     name="${name%.tar.gz}-${run_id}"
-    machinectl --quiet import-tar "$tarball" "$name" &
-    pids[$name]=$!
+    names+=("$name")
+    imports+=("$tarball" "$name")
 done
 
-status=0
-
-for name in "${!pids[@]}"; do
-    if ! wait "${pids[$name]}"; then
-        printf 1>&2 -- 'Failed to import %s\n' "$name"
-        status=1
-    fi
-done
-
-(( status == 0 )) || exit "$status"
-
-names=("${!pids[@]}")
+"${scripts_dir}/run-parallel" 2 machinectl --quiet import-tar -- "${imports[@]}"
 
 # Work around problems with systemd-nspawn 249 (Ubuntu 22.04); 255 and later
 # boot the guests as they are.  The settings only apply to these guests, and

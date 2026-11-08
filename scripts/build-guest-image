@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+
+# Builds one guest root filesystem from BASE_IMAGE and writes it to
+# OUTDIR/NAME.tar.gz, ready for `machinectl import-tar`, then prints the build
+# output under a heading that says whether it succeeded.  See
+# scripts/build-guest-images, which builds all the guests.
+#
+# Docker (or anything CLI-compatible with BuildKit support, set via $DOCKER) is
+# only used to assemble the files; nothing is run as a Docker container.
+#
+# Usage: build-guest-image OUTDIR NAME BASE_IMAGE
+
+set -euo pipefail
+
+if (( $# != 3 )); then
+    printf 1>&2 -- 'Usage: %s OUTDIR NAME BASE_IMAGE\n' "${BASH_SOURCE[0]##*/}"
+    exit 1
+fi
+
+outdir="$1"
+guests_dir="$(readlink -f "${BASH_SOURCE[0]%/*}/../tests/guests")"
+docker="${DOCKER:-docker}"
+
+if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    group_start() {
+        printf -- '::group::%s\n' "${1?internal error}"
+    }
+
+    group_end() {
+        printf -- '::endgroup::\n'
+    }
+else
+    group_start() {
+        printf -- '==> %s\n' "${1?internal error}"
+    }
+
+    group_end() {
+        :
+    }
+fi
+
+build_one() {
+    local name="$1" image="$2"
+    local tarball="${outdir}/${name}.tar.gz"
+    local tarball_tmp
+    tarball_tmp="$(mktemp "${outdir}/.${name}.XXXXXXXXXX.tar.gz")" || return
+
+    "$docker" build \
+        --pull \
+        --build-arg "BASE_IMAGE=${image}" \
+        --file "${guests_dir}/Containerfile" \
+        --output "type=tar,dest=-" \
+        "$guests_dir" \
+        | gzip -1 > "$tarball_tmp" || {
+        local rc="$?"
+        rm -f "$tarball_tmp"
+        return "$rc"
+    }
+
+    mv -f "$tarball_tmp" "$tarball"
+}
+
+log="$(mktemp)"
+trap 'rm -f "$log"' EXIT
+
+status=0
+build_one "$2" "$3" &> "$log" || status="$?"
+
+if (( status == 0 )); then
+    group_start "${2}: OK"
+else
+    group_start "${2}: FAILED"
+fi
+
+cat "$log"
+group_end
+
+exit "$status"

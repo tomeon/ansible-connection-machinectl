@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+# Runs COMMAND once for each consecutive group of NARGS ARGs, appending the
+# group to it: all groups at once with GNU parallel or moreutils' parallel,
+# whichever is installed as `parallel`, or else one group after another.
+# Exits nonzero if any run fails.
+#
+# Usage: run-parallel NARGS COMMAND [COMMAND_ARG...] -- [ARG...]
+# Example: run-parallel 2 machinectl import-tar -- a.tar a b.tar b
+
+set -euo pipefail
+
+usage() {
+    printf 1>&2 -- 'Usage: %s NARGS COMMAND [COMMAND_ARG...] -- [ARG...]\n' "${BASH_SOURCE[0]##*/}"
+    exit 1
+}
+
+if (( $# < 3 )) || ! [[ "$1" =~ ^[1-9][0-9]*$ ]]; then
+    usage
+fi
+
+nargs="$1"
+shift
+
+command=()
+while (( $# > 0 )) && [[ "$1" != -- ]]; do
+    command+=("$1")
+    shift
+done
+
+if (( $# == 0 )) || (( ${#command[@]} == 0 )); then
+    usage
+fi
+
+shift
+args=("$@")
+
+if (( ${#args[@]} % nargs != 0 )); then
+    printf 1>&2 -- '%s: %d arguments do not divide into groups of %d\n' "${BASH_SOURCE[0]##*/}" "${#args[@]}" "$nargs"
+    exit 1
+fi
+
+jobs=$(( ${#args[@]} / nargs ))
+
+if (( jobs == 0 )); then
+    exit 0
+fi
+
+if parallel --version 2>/dev/null | grep -q '^GNU parallel'; then
+    # -q: pass COMMAND's words through as they are, rather than to a shell.
+    exec parallel --will-cite -q -j "$jobs" -N "$nargs" "${command[@]}" ::: "${args[@]}"
+elif parallel -h 2>&1 | grep -q -- '^parallel \[OPTIONS\] command -- arguments'; then
+    exec parallel -j "$jobs" -n "$nargs" "${command[@]}" -- "${args[@]}"
+fi
+
+status=0
+
+for (( i = 0; i < ${#args[@]}; i += nargs )); do
+    "${command[@]}" "${args[@]:i:nargs}" || status="$?"
+done
+
+exit "$status"
