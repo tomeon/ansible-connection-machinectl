@@ -81,7 +81,8 @@ Known issues
   fails with `Failed to get shell PTY: Unit container-shell@N.service already
   exists`.  systemd-machined names the guest's shell unit after its terminal
   number, and the previous unit of that name had not yet been cleaned up.
-  Running the task again works.
+  Running the task again works.  In CI this has only happened with Ubuntu
+  22.04 guests, about once in 14 jobs, so the tests skip that combination.
 
 Testing
 -------
