@@ -66,6 +66,32 @@ running `machinectl`; at the moment, do:
 $ sudo -E ansible -c machinectl -m setup <target-machine>
 ```
 
+Testing
+-------
+
+The integration tests in [`tests/test.yml`](tests/test.yml) run against every
+machine registered with `systemd-machined`, using the dynamic inventory in
+[`contrib/inventory`](contrib/inventory).  Running them needs a host booted
+with `systemd` that has `machinectl` and `systemd-nspawn` (the
+`systemd-container` package on Debian and Ubuntu), Docker with BuildKit (only
+for building guest images), and [tox](https://tox.wiki/) with
+[tox-uv](https://github.com/tox-dev/tox-uv):
+
+```sh
+# Build a root filesystem tarball for each guest in tests/guests/images
+$ scripts/build-guest-images ./guests
+
+# Import the guests into /var/lib/machines, boot them, and wait for them
+$ sudo scripts/import-guest-images ./guests
+
+# Run one tox environment (see `tox list`), or all of them
+$ sudo env "PATH=$PATH" scripts/run-tests -e py314-ansible221
+```
+
+[CI](.github/workflows/ci.yml) does the same on GitHub's Ubuntu 22.04, 24.04
+and 26.04 runners, on both x86-64 and arm64, for ansible-core 2.16 through
+2.22.
+
 License
 -------
 
