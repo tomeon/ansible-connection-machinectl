@@ -26,6 +26,7 @@
     - name: skip guests whose Python this ansible-core release does not support
       when: >-
         ansible_core_series in newest_target_python
+        and guest_python.stdout | trim | length > 0
         and guest_python.stdout | trim is version(newest_target_python[ansible_core_series], '>')
       block:
         - name: report skipped guest
