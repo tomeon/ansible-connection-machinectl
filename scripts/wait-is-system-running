@@ -1,57 +1,71 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # Waits until systemd has finished booting, either on the host (no arguments)
-# or in each of the named machines, and prints the resulting state.  Exits
+# or in each of the named machines, and prints the resulting states.  Exits
 # nonzero if a system ends up in a state other than "running" or "degraded",
-# or is still booting after $WAIT_TIMEOUT seconds (default: 300).
+# or if any is still booting after $WAIT_TIMEOUT seconds (default: 300); in
+# that case, also prints what the system is still waiting for.
 #
 # Usage: wait-is-system-running [MACHINE...]
 
-set -eu
+set -uo pipefail
 
-timeout="${WAIT_TIMEOUT:-300}"
+deadline=$(( SECONDS + ${WAIT_TIMEOUT:-300} ))
 
-wait_one() {
-    deadline=$(( $(date +%s) + timeout ))
-
-    while :; do
-        # Prints e.g. "offline" (or nothing) until the machine's bus is up.
-        state="$(systemctl ${1:+--machine="$1"} is-system-running 2>/dev/null)" || :
-
-        case "$state" in
-            running)
-                break
-                ;;
-            degraded)
-                systemctl ${1:+--machine="$1"} --no-pager --failed || :
-                break
-                ;;
-            ''|offline|initializing|starting)
-                if [ "$(date +%s)" -ge "$deadline" ]; then
-                    echo "${1:-host}: timed out waiting for boot (state: ${state:-unknown})" 1>&2
-                    return 1
-                fi
-                sleep 2
-                ;;
-            *)
-                echo "${1:-host}: ${state}" 1>&2
-                return 1
-                ;;
-        esac
-    done
-
-    echo "${1:-host}: ${state}"
-}
-
-if [ $# -eq 0 ]; then
-    wait_one
-    exit
+if (( $# == 0 )); then
+    set -- .host
 fi
+
+declare -A pending=()
+for machine in "$@"; do
+    pending[$machine]=1
+done
 
 status=0
 
-for machine in "$@"; do
-    wait_one "$machine" || status=1
+while :; do
+    for machine in "${!pending[@]}"; do
+        # Prints e.g. "offline" (or nothing) until the machine's bus is up.
+        state="$(systemctl --machine="$machine" is-system-running 2>/dev/null)"
+
+        case "$state" in
+            ''|offline|initializing|starting)
+                continue
+                ;;
+            running)
+                echo "${machine}: ${state}"
+                ;;
+            degraded)
+                echo "${machine}: ${state}"
+                systemctl --machine="$machine" --no-pager --failed
+                ;;
+            *)
+                echo 1>&2 "${machine}: ${state}"
+                status=1
+                ;;
+        esac
+
+        unset "pending[$machine]"
+    done
+
+    if (( ${#pending[@]} == 0 )); then
+        exit "$status"
+    fi
+
+    if (( SECONDS >= deadline )); then
+        break
+    fi
+
+    sleep 2
 done
 
-exit "$status"
+for machine in "${!pending[@]}"; do
+    echo 1>&2 "${machine}: timed out waiting for boot to finish"
+    systemctl --machine="$machine" is-system-running 1>&2
+    systemctl --machine="$machine" --no-pager list-jobs 1>&2
+    if [[ "$machine" != .host ]]; then
+        machinectl --no-pager status "$machine" 1>&2
+    fi
+done
+
+exit 1
