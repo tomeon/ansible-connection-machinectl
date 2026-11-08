@@ -44,10 +44,13 @@ from ansible.plugins.connection import ConnectionBase
 from ansible.utils.vars import merge_hash
 
 try:
-    from ansible.module_utils._text import to_bytes, to_native
+    from ansible.module_utils.common.text.converters import to_bytes, to_native
 except ImportError:
-    from ansible.utils.unicode import to_bytes
-    from ansible.utils.unicode import to_str as to_native
+    try:
+        from ansible.module_utils._text import to_bytes, to_native
+    except ImportError:
+        from ansible.utils.unicode import to_bytes
+        from ansible.utils.unicode import to_str as to_native
 
 try:
     from __main__ import display
