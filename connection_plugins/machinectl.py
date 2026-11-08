@@ -26,7 +26,6 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 import collections
-import distutils.spawn
 import fcntl
 import os
 import pty
@@ -34,6 +33,11 @@ import re
 import select
 import shlex
 import subprocess
+
+try:
+    from shutil import which as find_executable
+except ImportError:  # Python 2
+    from distutils.spawn import find_executable
 
 from ansible.errors import AnsibleError
 from ansible.plugins.connection import ConnectionBase
@@ -68,7 +72,7 @@ class MachineCtl(object):
         if command is not None:
             self.command = command
         else:
-            self.command = distutils.spawn.find_executable('machinectl')
+            self.command = find_executable('machinectl')
             if not self.command:
                 raise AnsibleError('machinectl executable not found in PATH')
 
