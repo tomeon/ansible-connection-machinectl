@@ -1,14 +1,24 @@
 #!/usr/bin/env bash
 
+# Starts the named machine images, or all of them if none are named.
+#
+# Usage: spawn-containers [IMAGE...]
+
 set -euo pipefail
+
+if (( $# == 0 )); then
+    while read -r image _; do
+        set -- "$@" "$image"
+    done < <(machinectl --no-pager --no-legend list-images)
+fi
 
 status=0
 
-while read -r image _; do
+for image in "$@"; do
     if ! machinectl start "$image"; then
-        systemctl status -l "systemd-nspawn@${image}"
+        systemctl status --no-pager -l "systemd-nspawn@${image}" || :
         status=1
     fi
-done < <(machinectl --no-pager --no-legend list-images)
+done
 
 exit "$status"

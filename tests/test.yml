@@ -1,6 +1,87 @@
 ---
-- hosts: all
+# scripts/run-tests imports this run's guests as NAME-RUN_ID and passes
+# RUN_ID as test_run_id; target only those guests.
+- name: check that there are guests to test
+  hosts: localhost
+  gather_facts: false
   tasks:
+    - name: find the guests to test
+      assert:
+        that: query('inventory_hostnames', guest_pattern) | length > 0
+        fail_msg: "No machines match {{ guest_pattern }}"
+  vars:
+    guest_pattern: "{{ ('*-' ~ test_run_id) if test_run_id | default('') else 'all' }}"
+
+- name: test the machinectl connection plugin
+  hosts: "{{ ('*-' ~ test_run_id) if test_run_id | default('') else 'all' }}"
+  gather_facts: false
+  vars:
+    # The newest managed-node Python each ansible-core release supports; see
+    # https://docs.ansible.com/projects/ansible/latest/reference_appendices/release_and_maintenance.html#ansible-core-support-matrix
+    newest_target_python:
+      '2.16': '3.12'
+      '2.17': '3.12'
+      '2.18': '3.13'
+      '2.19': '3.13'
+      '2.20': '3.14'
+      '2.21': '3.14'
+      '2.22': '3.15'
+    ansible_core_series: "{{ ansible_version.major }}.{{ ansible_version.minor }}"
+    # Guests that are known not to work (reliably) when the host runs
+    # particular versions of systemd; see "Known issues" in README.md.
+    known_broken:
+      # No command output reaches the host.
+      almalinux-9: ['255']
+      # Commands intermittently fail with "Unit container-shell@N.service
+      # already exists" (about one CI job in 14 on Ubuntu 22.04 hosts), and
+      # the failure can't be told apart reliably enough to retry it.
+      ubuntu-2204: ['249']
+    host_systemd_version: "{{ lookup('pipe', 'systemctl --version').split()[1] }}"
+    # The guest's name in tests/guests/images.
+    guest_name: >-
+      {{ inventory_hostname | regex_replace('-' ~ test_run_id ~ '$', '')
+         if test_run_id | default('') else inventory_hostname }}
+  tasks:
+    - name: skip guests that are known not to work with the host's systemd
+      when: host_systemd_version in known_broken.get(guest_name, [])
+      block:
+        - name: report skipped guest
+          debug:
+            msg: >-
+              Skipping {{ inventory_hostname }}: known not to work reliably
+              when the host runs systemd {{ host_systemd_version }} (see
+              README.md).
+        - name: stop testing this guest
+          meta: end_host
+
+    # machinectl shell only runs commands given by absolute path, so go
+    # through the shell.
+    - name: find the guest's Python version
+      raw: python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])'
+      args:
+        executable: /bin/sh
+      register: guest_python
+      changed_when: false
+      failed_when: >-
+        guest_python.rc != 0
+        or guest_python.stdout | trim is not match('^[0-9]+[.][0-9]+$')
+
+    - name: skip guests whose Python this ansible-core release does not support
+      when: >-
+        ansible_core_series in newest_target_python
+        and guest_python.stdout | trim is version(newest_target_python[ansible_core_series], '>')
+      block:
+        - name: report skipped guest
+          debug:
+            msg: >-
+              Skipping {{ inventory_hostname }}: ansible-core {{ ansible_core_series }}
+              does not support Python {{ guest_python.stdout | trim }} on managed nodes.
+        - name: stop testing this guest
+          meta: end_host
+
+    - name: gather facts
+      setup:
+
     - name: create a directory
       file:
         path: '/etc/foo/bar/baz'

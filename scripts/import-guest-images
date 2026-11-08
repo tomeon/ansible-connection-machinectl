@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+
+# Imports the guest root filesystems built by build-guest-images (DIR/*.tar.gz)
+# as machine images named NAME-RUN_ID, in parallel where possible (see
+# scripts/run-parallel), boots them, and waits until they have finished
+# booting.  scripts/remove-guests RUN_ID removes them again, along
+# with any configuration added for them here.  Must be run as root.
+#
+# Usage: import-guest-images RUN_ID DIR
+
+set -euo pipefail
+
+if (( $# != 2 )); then
+    printf 1>&2 -- 'Usage: %s RUN_ID DIR\n' "${BASH_SOURCE[0]##*/}"
+    exit 1
+fi
+
+run_id="$1"
+guests_dir="${2%/}"
+scripts_dir="${BASH_SOURCE[0]%/*}"
+
+shopt -s nullglob
+
+tarballs=("$guests_dir"/*.tar.gz)
+
+if (( ${#tarballs[@]} == 0 )); then
+    printf 1>&2 -- 'No guest images found in %s\n' "$guests_dir"
+    exit 1
+fi
+
+names=()
+# TARBALL NAME pairs.
+imports=()
+
+for tarball in "${tarballs[@]}"; do
+    name="${tarball##*/}"
+    name="${name%.tar.gz}-${run_id}"
+    names+=("$name")
+    imports+=("$tarball" "$name")
+done
+
+"${scripts_dir}/run-parallel" 2 machinectl --quiet import-tar -- "${imports[@]}"
+
+# Work around problems with systemd-nspawn 249 (Ubuntu 22.04); 255 and later
+# boot the guests as they are.  The settings only apply to these guests, and
+# live under /run, so they are gone after a reboot even if remove-guests never
+# runs.
+systemd_version="$(systemctl --version | awk 'NR == 1 { print $2 }')"
+
+if (( systemd_version < 255 )); then
+    mkdir -p /run/systemd/nspawn
+
+    for name in "${names[@]}"; do
+        # It fails to boot user-namespaced containers whose root it maps with
+        # an idmapped mount, failing with "Value too large for defined data
+        # type" as it creates /var/log/journal.  Have it shift file ownership
+        # on disk instead.
+        printf -- '[Files]\nPrivateUsersOwnership=chown\n' > "/run/systemd/nspawn/${name}.nspawn"
+
+        # It gives guests running systemd 258 or later a legacy cgroup v1
+        # hierarchy, on which they refuse to boot.
+        dropin_dir="/run/systemd/system/systemd-nspawn@${name}.service.d"
+        mkdir -p "$dropin_dir"
+        printf -- '[Service]\nEnvironment=SYSTEMD_NSPAWN_UNIFIED_HIERARCHY=1\n' \
+            > "${dropin_dir}/unified-cgroup-hierarchy.conf"
+    done
+
+    systemctl daemon-reload
+fi
+
+machinectl --no-pager list-images
+
+"${scripts_dir}/spawn-containers" "${names[@]}"
+exec "${scripts_dir}/wait-is-system-running" "${names[@]}"

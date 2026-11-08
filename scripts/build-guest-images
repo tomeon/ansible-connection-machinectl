@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+# Builds the guest root filesystems listed in tests/guests/images for the
+# current architecture (or just the named ones) with scripts/build-guest-image,
+# in parallel where possible (see scripts/run-parallel), writing each one to
+# OUTDIR/NAME.tar.gz, ready for `machinectl import-tar` (see
+# scripts/import-guest-images).
+#
+# Usage: build-guest-images OUTDIR [NAME...]
+
+set -euo pipefail
+
+if (( $# < 1 )); then
+    printf 1>&2 -- 'Usage: %s OUTDIR [NAME...]\n' "${BASH_SOURCE[0]##*/}"
+    exit 1
+fi
+
+outdir="$1"
+shift
+
+scripts_dir="$(readlink -f "${BASH_SOURCE[0]%/*}")"
+guests_dir="$(readlink -f "${scripts_dir}/../tests/guests")"
+
+case "$(uname -m)" in
+    x86_64)  arch=amd64 ;;
+    aarch64) arch=arm64 ;;
+    *)       arch="$(uname -m)" ;;
+esac
+
+declare -A wanted=()
+for name in "$@"; do
+    wanted[$name]=1
+done
+
+if (( ${#wanted[@]} == 0 )); then
+    is_wanted() {
+        :
+    }
+else
+    is_wanted() {
+        [[ -v "wanted[${1?internal error}]" ]]
+    }
+fi
+
+# NAME BASE_IMAGE pairs.
+builds=()
+
+while read -r name image archs; do
+    if [[ -z "$name" ]] || [[ "$name" == \#* ]]; then
+        continue
+    fi
+
+    is_wanted "$name" || continue
+
+    if [[ -n "$archs" ]] && [[ " ${archs} " != *" ${arch} "* ]]; then
+        printf 1>&2 -- 'Skipping %s: not built on %s\n' "$name" "$arch"
+        continue
+    fi
+
+    printf 1>&2 -- 'Building %s from %s\n' "$name" "$image"
+    builds+=("$name" "$image")
+done < "${guests_dir}/images"
+
+if (( ${#builds[@]} == 0 )); then
+    echo 1>&2 "No guests to build"
+    exit 1
+fi
+
+mkdir -p "$outdir"
+
+exec "${scripts_dir}/run-parallel" 2 "${scripts_dir}/build-guest-image" "$outdir" -- "${builds[@]}"

@@ -26,7 +26,6 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 import collections
-import distutils.spawn
 import fcntl
 import os
 import pty
@@ -35,15 +34,23 @@ import select
 import shlex
 import subprocess
 
-from ansible.errors import AnsibleError
+try:
+    from shutil import which as find_executable
+except ImportError:  # Python 2
+    from distutils.spawn import find_executable
+
+from ansible.errors import AnsibleError, AnsibleFileNotFound
 from ansible.plugins.connection import ConnectionBase
 from ansible.utils.vars import merge_hash
 
 try:
-    from ansible.module_utils._text import to_bytes, to_native
+    from ansible.module_utils.common.text.converters import to_bytes, to_native
 except ImportError:
-    from ansible.utils.unicode import to_bytes
-    from ansible.utils.unicode import to_str as to_native
+    try:
+        from ansible.module_utils._text import to_bytes, to_native
+    except ImportError:
+        from ansible.utils.unicode import to_bytes
+        from ansible.utils.unicode import to_str as to_native
 
 try:
     from __main__ import display
@@ -64,11 +71,18 @@ class MachineCtl(object):
     # https://github.com/systemd/systemd/issues/2420
     MACHINECTL_GETOPT_FIX_VERSION = '230'
 
+    # Tell the machine that `shell' commands run on a dumb terminal, as newer
+    # versions of machinectl do by themselves when their output is not a
+    # terminal.  Otherwise systemd 258 and later inside the machine write OSC
+    # 3008 context sequences (https://systemd.io/OSC_CONTEXT) into the
+    # command's output, which older versions of machinectl pass through.
+    SHELL_OPTS = ['--setenv=TERM=dumb']
+
     def __init__(self, command=None):
         if command is not None:
             self.command = command
         else:
-            self.command = distutils.spawn.find_executable('machinectl')
+            self.command = find_executable('machinectl')
             if not self.command:
                 raise AnsibleError('machinectl executable not found in PATH')
 
@@ -91,7 +105,7 @@ class MachineCtl(object):
             matched = re.match(r'\Asystemd\s+(\d+)\D', to_native(version_output))
             return (matched.groups())[0]
         except subprocess.CalledProcessError as e:
-            raise AnsibleError('failed to retrieve machinectl version: {0}'.format(e.message))
+            raise AnsibleError('failed to retrieve machinectl version: {0}'.format(e))
 
     def property(self, wanted, machine=None):
         ''' Returns the value of a single machine property '''
@@ -104,6 +118,9 @@ class MachineCtl(object):
         Constructs a machinectl command with proper argument ordering.
         Special-cases arguments to the shell subcommand if appropriate.
         '''
+
+        if action == 'shell':
+            opts = self.SHELL_OPTS + opts
 
         local_cmd = [self.command] + opts + [action]
 

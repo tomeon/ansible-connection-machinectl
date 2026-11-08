@@ -1,43 +1,75 @@
 #!/usr/bin/env bash
 
+# Runs the integration tests against a fresh set of guests, then removes them.
+#
+# Imports the guest root filesystems in GUESTS_DIR (built by
+# build-guest-images) under names unique to this run, boots them, and runs tox
+# from the repository root, passing on TOX_ARGS; the tests target only this
+# run's guests.  On exit, whether or not the tests pass, the guests are stopped
+# and removed, unless $KEEP_GUESTS is set.  Must be run as root, since
+# `machinectl shell` requires it.
+#
+# Usage: run-tests GUESTS_DIR [TOX_ARGS...]
+# Example: sudo env "PATH=$PATH" scripts/run-tests ./guests -e py314-ansible221
+
 set -euo pipefail
 
-TEST_DIR=''
-
-if (( $# > 0 )); then
-    TEST_DIR="$1"
-    shift
-else
-    TEST_DIR="$(readlink -f "${BASH_SOURCE[0]%/*}/..")"
+if (( $# < 1 )); then
+    printf 1>&2 -- 'Usage: %s GUESTS_DIR [TOX_ARGS...]\n' "${BASH_SOURCE[0]##*/}"
+    exit 1
 fi
 
-cd "$TEST_DIR"
+guests_dir="$(readlink -f "$1")"
+shift
 
-# shellcheck disable=SC2030
-if (! tty || ! read -r -t 1 -n 0) &>/dev/null; then
-    coproc socat PTY,link="${PWD}/tty" OPEN:/dev/null,ignoreeof
+scripts_dir="$(readlink -f "${BASH_SOURCE[0]%/*}")"
 
-    cleanup() {
-        if [[ -n "${COPROC_PID:-}" ]]; then
-            # shellcheck disable=SC2031
-            kill "$COPROC_PID" || printf 1>&2 -- '%s: killing socat failed with exit status "%d"\n' "$0" "$?"
-        fi
+# The first group of a random UUID: short enough to keep machine names
+# readable, and unique enough to tell this run's guests from any others.
+run_id="$(cut -d- -f1 /proc/sys/kernel/random/uuid)"
+
+if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    group_start() {
+        printf -- '::group::%s\n' "${1?internal error}"
     }
 
-    trap cleanup exit
-
-    for _ in {1..10}; do
-        if [[ -e "${PWD}/tty" ]]; then
-            break
-        fi
-
-        sleep 1
-    done
-
-    # Fails and exits if the TTY does not exist
-    exec 0< "${PWD}/tty"
-
-    tox "$@"
+    group_end() {
+        printf -- '::endgroup::\n'
+    }
 else
-    exec tox "$@"
+    group_start() {
+        printf -- '==> %s\n' "${1?internal error}"
+    }
+
+    group_end() {
+        :
+    }
 fi
+
+cleanup() {
+    local status=$?
+
+    trap - EXIT
+
+    if [[ -n "${KEEP_GUESTS:-}" ]]; then
+        printf 1>&2 -- 'Keeping guests; remove them with: %s/remove-guests %s\n' "$scripts_dir" "$run_id"
+    else
+        group_start "Remove guests for run ${run_id}"
+        "${scripts_dir}/remove-guests" "$run_id" || (( status != 0 )) || status=1
+        group_end
+    fi
+
+    exit "$status"
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+group_start "Import and boot guests for run ${run_id}"
+"${scripts_dir}/import-guest-images" "$run_id" "$guests_dir"
+group_end
+
+cd "${scripts_dir}/.."
+
+MACHINECTL_TEST_RUN_ID="$run_id" tox run "$@"

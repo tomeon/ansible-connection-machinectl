@@ -1,0 +1,24 @@
+# Guest machines used by the integration tests.
+#
+# Each line is: MACHINE-NAME  BASE-IMAGE  [ARCHITECTURE...]
+#
+# MACHINE-NAME is the name the guest gets under /var/lib/machines (and so in
+# the Ansible inventory).  BASE-IMAGE is an OCI image that
+# scripts/build-guest-images turns into a bootable root filesystem.  If any
+# architectures (Debian names, as printed by `dpkg --print-architecture`) are
+# listed, the guest is only built on those; otherwise it is built everywhere.
+#
+# Images come from mirror.gcr.io and the distributions' own registries rather
+# than Docker Hub to stay clear of Docker Hub's anonymous pull limit.
+
+debian-12             mirror.gcr.io/library/debian:bookworm
+debian-13             mirror.gcr.io/library/debian:trixie
+ubuntu-2204           mirror.gcr.io/library/ubuntu:22.04
+ubuntu-2404           mirror.gcr.io/library/ubuntu:24.04
+ubuntu-2604           mirror.gcr.io/library/ubuntu:26.04
+fedora                quay.io/fedora/fedora:latest
+almalinux-9           quay.io/almalinuxorg/almalinux:9
+almalinux-10          quay.io/almalinuxorg/almalinux:10
+opensuse-leap-16      registry.opensuse.org/opensuse/leap:16.0
+opensuse-tumbleweed   registry.opensuse.org/opensuse/tumbleweed:latest
+archlinux             mirror.gcr.io/library/archlinux:latest  amd64

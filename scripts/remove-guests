@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+# Stops and removes the guests that import-guest-images imported for RUN_ID
+# (the machine images named *-RUN_ID), along with the configuration it added
+# for them.  Must be run as root.
+#
+# Usage: remove-guests RUN_ID
+
+set -uo pipefail
+
+if (( $# != 1 )) || ! [[ "$1" =~ ^[[:alnum:]]+$ ]]; then
+    printf 1>&2 -- 'Usage: %s RUN_ID\n' "${BASH_SOURCE[0]##*/}"
+    exit 1
+fi
+
+run_id="$1"
+status=0
+names=()
+
+while read -r name _; do
+    if [[ "$name" == *-"$run_id" ]]; then
+        names+=("$name")
+    fi
+done < <(machinectl --no-pager --no-legend list-images)
+
+for name in "${names[@]}"; do
+    unit="systemd-nspawn@${name}.service"
+
+    # Unlike `machinectl terminate`, this waits for the machine to be gone.
+    systemctl stop "$unit" || status="$?"
+    systemctl reset-failed "$unit" 2>/dev/null || :
+
+    machinectl remove "$name" || status="$?"
+
+    rm -f "/run/systemd/nspawn/${name}.nspawn"
+    rm -rf "/run/systemd/system/${unit}.d"
+done
+
+systemctl daemon-reload || status="$?"
+
+printf -- 'Removed %d guest(s) for run %s\n' "${#names[@]}" "$run_id"
+exit "$status"

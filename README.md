@@ -66,6 +66,60 @@ running `machinectl`; at the moment, do:
 $ sudo -E ansible -c machinectl -m setup <target-machine>
 ```
 
+Known issues
+------------
+
+- AlmaLinux 9 guests do not work when the host runs systemd 255 (as on
+  Ubuntu 24.04): commands succeed, but none of their output reaches the host,
+  so Ansible cannot read module results.  The same guests work with systemd
+  249 (Ubuntu 22.04) and 259 (Ubuntu 26.04) on the host.  The likely cause is
+  that systemd-machined 255 sets `TTYPath=` on the guest's shell unit, and
+  that the guest's systemd resets (and thereby flushes) that terminal when the
+  unit stops, before the host has read the output.  The tests skip this
+  combination.
+- With systemd 249 on the host (as on Ubuntu 22.04), a command occasionally
+  fails with `Failed to get shell PTY: Unit container-shell@N.service already
+  exists`.  systemd-machined names the guest's shell unit after its terminal
+  number, and the previous unit of that name had not yet been cleaned up.
+  Running the task again works.  In CI this has only happened with Ubuntu
+  22.04 guests, about once in 14 jobs, so the tests skip that combination.
+
+Testing
+-------
+
+The integration tests in [`tests/test.yml`](tests/test.yml) run against
+`systemd-nspawn` guests built from distribution container images, using the
+dynamic inventory in [`contrib/inventory`](contrib/inventory).  Running them
+needs a host booted with `systemd` that has `machinectl` and `systemd-nspawn`
+(the `systemd-container` package on Debian and Ubuntu), Docker with BuildKit
+(only for building guest images), and [tox](https://tox.wiki/) with
+[tox-uv](https://github.com/tox-dev/tox-uv).  With
+[GNU parallel](https://www.gnu.org/software/parallel/) or
+[moreutils](https://joeyh.name/code/moreutils/)' `parallel` installed, the
+guests are built and imported in parallel; otherwise one after another.
+
+```sh
+# Build a root filesystem tarball for each guest in tests/guests/images
+$ scripts/build-guest-images ./guests
+
+# Import and boot the guests, run the tests in one tox environment (see
+# `tox list`) or all of them, then remove the guests again
+$ sudo env "PATH=$PATH" scripts/run-tests ./guests -e py314-ansible221
+```
+
+`scripts/run-tests` imports the guests under names unique to the run (e.g.
+`debian-12-1a2b3c4d`), and the tests target only those, so other machines on
+the host are left alone.  When the run ends, whether or not the tests pass,
+it stops and removes the guests; set `KEEP_GUESTS=1` to keep them for
+inspection, and remove them later with `sudo scripts/remove-guests RUN_ID`.
+On hosts with systemd older than 255, it also adds per-guest settings under
+`/run` (see `scripts/import-guest-images`), which are removed along with the
+guests.
+
+[CI](.github/workflows/ci.yml) does the same on GitHub's Ubuntu 22.04, 24.04
+and 26.04 runners, on both x86-64 and arm64, for ansible-core 2.16 through
+2.22.
+
 License
 -------
 

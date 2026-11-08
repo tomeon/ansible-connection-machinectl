@@ -1,0 +1,8 @@
+# Turns a distribution's container image into a root filesystem that
+# systemd-nspawn can boot.  Docker (or Podman) is only used to assemble the
+# files; the result is exported with `docker export` and never run as a Docker
+# container.  See scripts/build-guest-images.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+COPY provision /tmp/provision
+RUN sh /tmp/provision && rm -f /tmp/provision
