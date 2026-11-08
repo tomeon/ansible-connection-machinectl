@@ -28,19 +28,23 @@ scripts_dir="$(readlink -f "${BASH_SOURCE[0]%/*}")"
 # readable, and unique enough to tell this run's guests from any others.
 run_id="$(cut -d- -f1 /proc/sys/kernel/random/uuid)"
 
-group_start() {
-    if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-        printf -- '::group::%s\n' "$1"
-    else
-        printf -- '==> %s\n' "$1"
-    fi
-}
+if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    group_start() {
+        printf -- '::group::%s\n' "${1?internal error}"
+    }
 
-group_end() {
-    if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    group_end() {
         printf -- '::endgroup::\n'
-    fi
-}
+    }
+else
+    group_start() {
+        printf -- '==> %s\n' "${1?internal error}"
+    }
+
+    group_end() {
+        :
+    }
+fi
 
 cleanup() {
     local status=$?

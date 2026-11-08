@@ -92,7 +92,10 @@ dynamic inventory in [`contrib/inventory`](contrib/inventory).  Running them
 needs a host booted with `systemd` that has `machinectl` and `systemd-nspawn`
 (the `systemd-container` package on Debian and Ubuntu), Docker with BuildKit
 (only for building guest images), and [tox](https://tox.wiki/) with
-[tox-uv](https://github.com/tox-dev/tox-uv):
+[tox-uv](https://github.com/tox-dev/tox-uv).  With
+[GNU parallel](https://www.gnu.org/software/parallel/) or
+[moreutils](https://joeyh.name/code/moreutils/)' `parallel` installed, the
+guests are built and imported in parallel; otherwise one after another.
 
 ```sh
 # Build a root filesystem tarball for each guest in tests/guests/images

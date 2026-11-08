@@ -27,16 +27,16 @@ for name in "${names[@]}"; do
     unit="systemd-nspawn@${name}.service"
 
     # Unlike `machinectl terminate`, this waits for the machine to be gone.
-    systemctl stop "$unit" || status=1
+    systemctl stop "$unit" || status="$?"
     systemctl reset-failed "$unit" 2>/dev/null || :
 
-    machinectl remove "$name" || status=1
+    machinectl remove "$name" || status="$?"
 
     rm -f "/run/systemd/nspawn/${name}.nspawn"
     rm -rf "/run/systemd/system/${unit}.d"
 done
 
-systemctl daemon-reload || status=1
+systemctl daemon-reload || status="$?"
 
 printf -- 'Removed %d guest(s) for run %s\n' "${#names[@]}" "$run_id"
 exit "$status"
