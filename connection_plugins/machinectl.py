@@ -39,7 +39,7 @@ try:
 except ImportError:  # Python 2
     from distutils.spawn import find_executable
 
-from ansible.errors import AnsibleError
+from ansible.errors import AnsibleError, AnsibleFileNotFound
 from ansible.plugins.connection import ConnectionBase
 from ansible.utils.vars import merge_hash
 
@@ -95,7 +95,7 @@ class MachineCtl(object):
             matched = re.match(r'\Asystemd\s+(\d+)\D', to_native(version_output))
             return (matched.groups())[0]
         except subprocess.CalledProcessError as e:
-            raise AnsibleError('failed to retrieve machinectl version: {0}'.format(e.message))
+            raise AnsibleError('failed to retrieve machinectl version: {0}'.format(e))
 
     def property(self, wanted, machine=None):
         ''' Returns the value of a single machine property '''
