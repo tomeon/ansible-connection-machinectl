@@ -86,24 +86,31 @@ Known issues
 Testing
 -------
 
-The integration tests in [`tests/test.yml`](tests/test.yml) run against every
-machine registered with `systemd-machined`, using the dynamic inventory in
-[`contrib/inventory`](contrib/inventory).  Running them needs a host booted
-with `systemd` that has `machinectl` and `systemd-nspawn` (the
-`systemd-container` package on Debian and Ubuntu), Docker with BuildKit (only
-for building guest images), and [tox](https://tox.wiki/) with
+The integration tests in [`tests/test.yml`](tests/test.yml) run against
+`systemd-nspawn` guests built from distribution container images, using the
+dynamic inventory in [`contrib/inventory`](contrib/inventory).  Running them
+needs a host booted with `systemd` that has `machinectl` and `systemd-nspawn`
+(the `systemd-container` package on Debian and Ubuntu), Docker with BuildKit
+(only for building guest images), and [tox](https://tox.wiki/) with
 [tox-uv](https://github.com/tox-dev/tox-uv):
 
 ```sh
 # Build a root filesystem tarball for each guest in tests/guests/images
 $ scripts/build-guest-images ./guests
 
-# Import the guests into /var/lib/machines, boot them, and wait for them
-$ sudo scripts/import-guest-images ./guests
-
-# Run one tox environment (see `tox list`), or all of them
-$ sudo env "PATH=$PATH" scripts/run-tests -e py314-ansible221
+# Import and boot the guests, run the tests in one tox environment (see
+# `tox list`) or all of them, then remove the guests again
+$ sudo env "PATH=$PATH" scripts/run-tests ./guests -e py314-ansible221
 ```
+
+`scripts/run-tests` imports the guests under names unique to the run (e.g.
+`debian-12-1a2b3c4d`), and the tests target only those, so other machines on
+the host are left alone.  When the run ends, whether or not the tests pass,
+it stops and removes the guests; set `KEEP_GUESTS=1` to keep them for
+inspection, and remove them later with `sudo scripts/remove-guests RUN_ID`.
+On hosts with systemd older than 255, it also adds per-guest settings under
+`/run` (see `scripts/import-guest-images`), which are removed along with the
+guests.
 
 [CI](.github/workflows/ci.yml) does the same on GitHub's Ubuntu 22.04, 24.04
 and 26.04 runners, on both x86-64 and arm64, for ansible-core 2.16 through

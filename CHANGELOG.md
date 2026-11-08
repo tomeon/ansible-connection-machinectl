@@ -10,7 +10,8 @@
   Fedora, AlmaLinux 9 and 10, openSUSE Leap 16 and Tumbleweed, and Arch Linux
   (x86-64 only). (#6)
 - Scripts for building guest images from distribution container images, and
-  for importing and booting them.
+  for running the tests against a set of them that is imported and booted
+  under names unique to the run, and removed afterwards.
 - tox-based testing setup for running tests against multiple versions of
   ansible-core.
 - Add `machined_config` structure to hostvars, representing the output of
