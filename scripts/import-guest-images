@@ -44,18 +44,27 @@ done
 
 (( status == 0 )) || exit "$status"
 
-# systemd-nspawn 249 (Ubuntu 22.04) fails to boot user-namespaced containers
-# whose root it maps with an idmapped mount, failing with "Value too large for
-# defined data type" as it creates /var/log/journal.  Have older versions
-# shift file ownership on disk instead.  (255 and later work as they are.)
+# Work around problems with systemd-nspawn 249 (Ubuntu 22.04); 255 and later
+# boot the guests as they are.
 systemd_version="$(systemctl --version | awk 'NR == 1 { print $2 }')"
 
 if (( systemd_version < 255 )); then
+    # It fails to boot user-namespaced containers whose root it maps with an
+    # idmapped mount, failing with "Value too large for defined data type" as
+    # it creates /var/log/journal.  Have it shift file ownership on disk
+    # instead.
     mkdir -p /etc/systemd/nspawn
 
     for name in "${!pids[@]}"; do
         printf -- '[Files]\nPrivateUsersOwnership=chown\n' > "/etc/systemd/nspawn/${name}.nspawn"
     done
+
+    # It gives guests running systemd 258 or later a legacy cgroup v1
+    # hierarchy, on which they refuse to boot.
+    mkdir -p /etc/systemd/system/systemd-nspawn@.service.d
+    printf -- '[Service]\nEnvironment=SYSTEMD_NSPAWN_UNIFIED_HIERARCHY=1\n' \
+        > /etc/systemd/system/systemd-nspawn@.service.d/unified-cgroup-hierarchy.conf
+    systemctl daemon-reload
 fi
 
 machinectl --no-pager list-images
