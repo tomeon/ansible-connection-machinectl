@@ -71,6 +71,13 @@ class MachineCtl(object):
     # https://github.com/systemd/systemd/issues/2420
     MACHINECTL_GETOPT_FIX_VERSION = '230'
 
+    # Tell the machine that `shell' commands run on a dumb terminal, as newer
+    # versions of machinectl do by themselves when their output is not a
+    # terminal.  Otherwise systemd 258 and later inside the machine write OSC
+    # 3008 context sequences (https://systemd.io/OSC_CONTEXT) into the
+    # command's output, which older versions of machinectl pass through.
+    SHELL_OPTS = ['--setenv=TERM=dumb']
+
     def __init__(self, command=None):
         if command is not None:
             self.command = command
@@ -111,6 +118,9 @@ class MachineCtl(object):
         Constructs a machinectl command with proper argument ordering.
         Special-cases arguments to the shell subcommand if appropriate.
         '''
+
+        if action == 'shell':
+            opts = self.SHELL_OPTS + opts
 
         local_cmd = [self.command] + opts + [action]
 
