@@ -47,6 +47,9 @@
   passed to `put_file` does not exist.
 - Report failures to query the `machinectl` version on Python 3, where
   `CalledProcessError` has no `message` attribute.
+- Run `machinectl shell` with `TERM=dumb`, so that guests running systemd 258
+  or later don't prefix command output with OSC 3008 context sequences when
+  the host's `machinectl` passes them through (e.g. systemd 255).
 
 ### Removed
 

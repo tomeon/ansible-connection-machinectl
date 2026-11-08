@@ -66,6 +66,23 @@ running `machinectl`; at the moment, do:
 $ sudo -E ansible -c machinectl -m setup <target-machine>
 ```
 
+Known issues
+------------
+
+- AlmaLinux 9 guests do not work when the host runs systemd 255 (as on
+  Ubuntu 24.04): commands succeed, but none of their output reaches the host,
+  so Ansible cannot read module results.  The same guests work with systemd
+  249 (Ubuntu 22.04) and 259 (Ubuntu 26.04) on the host.  The likely cause is
+  that systemd-machined 255 sets `TTYPath=` on the guest's shell unit, and
+  that the guest's systemd resets (and thereby flushes) that terminal when the
+  unit stops, before the host has read the output.  The tests skip this
+  combination.
+- With systemd 249 on the host (as on Ubuntu 22.04), a command occasionally
+  fails with `Failed to get shell PTY: Unit container-shell@N.service already
+  exists`.  systemd-machined names the guest's shell unit after its terminal
+  number, and the previous unit of that name had not yet been cleaned up.
+  Running the task again works.
+
 Testing
 -------
 
