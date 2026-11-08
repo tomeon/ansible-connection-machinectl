@@ -89,9 +89,6 @@ jobs:
           sudo apt-get install -y --no-install-recommends systemd-container
           machinectl --version
 
-      - name: Import and boot guests
-        run: sudo scripts/import-guest-images "${RUNNER_TEMP}/guests"
-
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           # tox runs as root (below), so the runner user's uv cache stays
@@ -101,17 +98,13 @@ jobs:
       - name: Install tox
         run: uv tool install tox --with tox-uv
 
-      # machinectl shell requires root.
+      # Imports and boots the guests, runs the tests against them, and removes
+      # them again.  machinectl shell requires root.
       - name: Run tests
         run: >-
           sudo env "PATH=${PATH}"
-          scripts/run-tests -e "py${PYTHON/./}-ansible${ANSIBLE/./}"
+          scripts/run-tests "${RUNNER_TEMP}/guests"
+          -e "py${PYTHON/./}-ansible${ANSIBLE/./}"
         env:
           ANSIBLE: ${{ matrix.ansible }}
           PYTHON: ${{ matrix.python }}
-
-      - name: Show guest status
-        if: always()
-        run: |
-          sudo machinectl list --all --no-pager || :
-          sudo systemctl status --no-pager --lines=50 'systemd-nspawn@*' || :

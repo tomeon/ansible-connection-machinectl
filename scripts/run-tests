@@ -1,14 +1,71 @@
 #!/usr/bin/env bash
 
-# Runs the integration tests with tox from the repository root; all arguments
-# are passed on to `tox run`.  The tests target every running machine known to
-# systemd-machined, and must be run as root because `machinectl shell` requires
-# it.
+# Runs the integration tests against a fresh set of guests, then removes them.
 #
-# Example: sudo scripts/run-tests -e py314-ansible221
+# Imports the guest root filesystems in GUESTS_DIR (built by
+# build-guest-images) under names unique to this run, boots them, and runs tox
+# from the repository root, passing on TOX_ARGS; the tests target only this
+# run's guests.  On exit, whether or not the tests pass, the guests are stopped
+# and removed, unless $KEEP_GUESTS is set.  Must be run as root, since
+# `machinectl shell` requires it.
+#
+# Usage: run-tests GUESTS_DIR [TOX_ARGS...]
+# Example: sudo env "PATH=$PATH" scripts/run-tests ./guests -e py314-ansible221
 
 set -euo pipefail
 
-cd "$(readlink -f "${BASH_SOURCE[0]%/*}/..")"
+if (( $# < 1 )); then
+    printf 1>&2 -- 'Usage: %s GUESTS_DIR [TOX_ARGS...]\n' "${BASH_SOURCE[0]##*/}"
+    exit 1
+fi
 
-exec tox run "$@"
+guests_dir="$(readlink -f "$1")"
+shift
+
+scripts_dir="$(readlink -f "${BASH_SOURCE[0]%/*}")"
+
+# The first group of a random UUID: short enough to keep machine names
+# readable, and unique enough to tell this run's guests from any others.
+run_id="$(cut -d- -f1 /proc/sys/kernel/random/uuid)"
+
+group_start() {
+    if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+        printf -- '::group::%s\n' "$1"
+    else
+        printf -- '==> %s\n' "$1"
+    fi
+}
+
+group_end() {
+    if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+        printf -- '::endgroup::\n'
+    fi
+}
+
+cleanup() {
+    local status=$?
+
+    trap - EXIT
+
+    if [[ -n "${KEEP_GUESTS:-}" ]]; then
+        printf 1>&2 -- 'Keeping guests; remove them with: %s/remove-guests %s\n' "$scripts_dir" "$run_id"
+    else
+        group_start "Remove guests for run ${run_id}"
+        "${scripts_dir}/remove-guests" "$run_id" || (( status != 0 )) || status=1
+        group_end
+    fi
+
+    exit "$status"
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+group_start "Import and boot guests for run ${run_id}"
+"${scripts_dir}/import-guest-images" "$run_id" "$guests_dir"
+group_end
+
+cd "${scripts_dir}/.."
+
+MACHINECTL_TEST_RUN_ID="$run_id" tox run "$@"
