@@ -1,6 +1,40 @@
 ---
 - hosts: all
+  gather_facts: false
+  vars:
+    # The newest managed-node Python each ansible-core release supports; see
+    # https://docs.ansible.com/projects/ansible/latest/reference_appendices/release_and_maintenance.html#ansible-core-support-matrix
+    newest_target_python:
+      '2.16': '3.12'
+      '2.17': '3.12'
+      '2.18': '3.13'
+      '2.19': '3.13'
+      '2.20': '3.14'
+      '2.21': '3.14'
+      '2.22': '3.15'
+    ansible_core_series: "{{ ansible_version.major }}.{{ ansible_version.minor }}"
   tasks:
+    - name: find the guest's Python version
+      raw: python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])'
+      register: guest_python
+      changed_when: false
+
+    - name: skip guests whose Python this ansible-core release does not support
+      when: >-
+        ansible_core_series in newest_target_python
+        and guest_python.stdout | trim is version(newest_target_python[ansible_core_series], '>')
+      block:
+        - name: report skipped guest
+          debug:
+            msg: >-
+              Skipping {{ inventory_hostname }}: ansible-core {{ ansible_core_series }}
+              does not support Python {{ guest_python.stdout | trim }} on managed nodes.
+        - name: stop testing this guest
+          meta: end_host
+
+    - name: gather facts
+      setup:
+
     - name: create a directory
       file:
         path: '/etc/foo/bar/baz'

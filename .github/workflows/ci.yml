@@ -1,0 +1,117 @@
+---
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Build the guest root filesystems once per architecture; every test job on
+  # that architecture boots the same set.
+  guests:
+    name: Build guests (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Build guest images
+        run: scripts/build-guest-images "${RUNNER_TEMP}/guests"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: guests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/guests/*.tar.gz
+          if-no-files-found: error
+          # The tarballs are already compressed.
+          compression-level: 0
+          retention-days: 1
+
+  # GitHub's Ubuntu runners are full VMs with systemd as PID 1, so machinectl
+  # and systemd-nspawn run directly on the runner.
+  test:
+    name: ${{ matrix.host }} ${{ matrix.arch }}, ansible-core ${{ matrix.ansible }}
+    needs: guests
+    runs-on: ${{ matrix.arch == 'arm64' && format('{0}-arm', matrix.host) || matrix.host }}
+    strategy:
+      fail-fast: false
+      matrix:
+        host:
+          - ubuntu-22.04
+          - ubuntu-24.04
+          - ubuntu-26.04
+        arch:
+          - amd64
+          - arm64
+        ansible:
+          - '2.16'
+          - '2.17'
+          - '2.18'
+          - '2.19'
+          - '2.20'
+          - '2.21'
+          - '2.22'
+        # The newest Python each ansible-core release supports on the
+        # controller.
+        include:
+          - {ansible: '2.16', python: '3.12'}
+          - {ansible: '2.17', python: '3.12'}
+          - {ansible: '2.18', python: '3.13'}
+          - {ansible: '2.19', python: '3.13'}
+          - {ansible: '2.20', python: '3.14'}
+          - {ansible: '2.21', python: '3.14'}
+          - {ansible: '2.22', python: '3.15'}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: guests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/guests
+
+      - name: Install machinectl and systemd-nspawn
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends systemd-container
+          machinectl --version
+
+      - name: Import and boot guests
+        run: sudo scripts/import-guest-images "${RUNNER_TEMP}/guests"
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          # tox runs as root (below), so the runner user's uv cache stays
+          # empty.
+          enable-cache: false
+
+      - name: Install tox
+        run: uv tool install tox --with tox-uv
+
+      # machinectl shell requires root.
+      - name: Run tests
+        run: >-
+          sudo env "PATH=${PATH}"
+          scripts/run-tests -e "py${PYTHON/./}-ansible${ANSIBLE/./}"
+        env:
+          ANSIBLE: ${{ matrix.ansible }}
+          PYTHON: ${{ matrix.python }}
+
+      - name: Show guest status
+        if: always()
+        run: |
+          sudo machinectl list --all --no-pager || :
+          sudo systemctl status --no-pager --lines=50 'systemd-nspawn@*' || :

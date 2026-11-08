@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+# Imports the guest root filesystems built by build-guest-images (DIR/*.tar.gz)
+# as machine images, boots them, and waits until they have finished booting.
+# Must be run as root.
+#
+# Usage: import-guest-images DIR
+
+set -euo pipefail
+
+if (( $# != 1 )); then
+    printf 1>&2 -- 'Usage: %s DIR\n' "${BASH_SOURCE[0]##*/}"
+    exit 1
+fi
+
+scripts_dir="${BASH_SOURCE[0]%/*}"
+
+shopt -s nullglob
+
+tarballs=("${1%/}"/*.tar.gz)
+
+if (( ${#tarballs[@]} == 0 )); then
+    printf 1>&2 -- 'No guest images found in %s\n' "$1"
+    exit 1
+fi
+
+declare -A pids=()
+
+for tarball in "${tarballs[@]}"; do
+    name="${tarball##*/}"
+    name="${name%.tar.gz}"
+    machinectl --quiet import-tar "$tarball" "$name" &
+    pids[$name]=$!
+done
+
+status=0
+
+for name in "${!pids[@]}"; do
+    if ! wait "${pids[$name]}"; then
+        printf 1>&2 -- 'Failed to import %s\n' "$name"
+        status=1
+    fi
+done
+
+(( status == 0 )) || exit "$status"
+
+machinectl --no-pager list-images
+
+"${scripts_dir}/spawn-containers"
+exec "${scripts_dir}/wait-is-system-running" "${!pids[@]}"
