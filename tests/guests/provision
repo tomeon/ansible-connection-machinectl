@@ -1,0 +1,45 @@
+#!/bin/sh
+
+# Installs what a guest needs in order to be booted by systemd-nspawn and
+# managed through the machinectl connection plugin:
+#
+#   - systemd, as init;
+#   - a D-Bus system bus, which `machinectl shell` uses to ask the guest's
+#     systemd to start the shell;
+#   - a PAM "login" service, which that shell unit is started with;
+#   - Python, for Ansible modules.
+
+set -eu
+
+if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends dbus login python3 systemd systemd-sysv
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+elif command -v dnf >/dev/null 2>&1; then
+    dnf -y install dbus python3 systemd util-linux
+    dnf clean all
+elif command -v zypper >/dev/null 2>&1; then
+    # Exit status 106 means that some repository (e.g. the third-party
+    # openh264 codec repository) could not be refreshed, but the packages
+    # were installed from the others.
+    rc=0
+    zypper --non-interactive install --no-recommends dbus-1 python3 systemd util-linux || rc=$?
+    [ "$rc" -eq 0 ] || [ "$rc" -eq 106 ]
+    zypper clean --all
+elif command -v pacman >/dev/null 2>&1; then
+    pacman -Syu --noconfirm --needed dbus python systemd util-linux
+    rm -rf /var/cache/pacman/pkg/*
+else
+    echo "provision: no supported package manager found" >&2
+    exit 1
+fi
+
+if ! [ -e /etc/pam.d/login ] && ! [ -e /usr/lib/pam.d/login ]; then
+    echo "provision: no PAM configuration for the login service" >&2
+    exit 1
+fi
+
+# Don't let a first-boot prompt stall the boot of a guest with no console.
+systemctl mask systemd-firstboot.service

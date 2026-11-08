@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+
+# Builds the guest root filesystems listed in tests/guests/images for the
+# current architecture and writes each one to OUTDIR/NAME.tar.gz, ready for
+# `machinectl import-tar` (see scripts/import-guest-images).
+#
+# Docker (or anything CLI-compatible with BuildKit support, set via $DOCKER) is
+# only used to assemble the files; nothing is run as a Docker container.
+#
+# Usage: build-guest-images OUTDIR [NAME...]
+
+set -euo pipefail
+
+usage() {
+    printf 1>&2 -- 'Usage: %s OUTDIR [NAME...]\n' "${BASH_SOURCE[0]##*/}"
+}
+
+if (( $# < 1 )); then
+    usage
+    exit 1
+fi
+
+outdir="$1"
+shift
+
+wanted=("$@")
+
+guests_dir="$(readlink -f "${BASH_SOURCE[0]%/*}/../tests/guests")"
+docker="${DOCKER:-docker}"
+
+case "$(uname -m)" in
+    x86_64)  arch=amd64 ;;
+    aarch64) arch=arm64 ;;
+    *)       arch="$(uname -m)" ;;
+esac
+
+is_wanted() {
+    local name="$1" w
+
+    (( ${#wanted[@]} == 0 )) && return 0
+
+    for w in "${wanted[@]}"; do
+        [[ "$w" == "$name" ]] && return 0
+    done
+
+    return 1
+}
+
+build_one() {
+    local name="$1" image="$2"
+    local tarball="${outdir}/${name}.tar.gz"
+
+    if ! "$docker" build \
+        --pull \
+        --build-arg "BASE_IMAGE=${image}" \
+        --file "${guests_dir}/Containerfile" \
+        --output "type=tar,dest=-" \
+        "$guests_dir" \
+        | gzip -1 > "${tarball}.tmp"
+    then
+        rm -f "${tarball}.tmp"
+        return 1
+    fi
+
+    mv "${tarball}.tmp" "$tarball"
+}
+
+group_start() {
+    if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+        printf -- '::group::%s\n' "$1"
+    else
+        printf -- '==> %s\n' "$1"
+    fi
+}
+
+group_end() {
+    if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+        printf -- '::endgroup::\n'
+    fi
+}
+
+mkdir -p "$outdir"
+
+declare -A pids=()
+
+while read -r name image archs; do
+    [[ -z "$name" || "$name" == \#* ]] && continue
+    is_wanted "$name" || continue
+
+    if [[ -n "$archs" && " ${archs} " != *" ${arch} "* ]]; then
+        printf 1>&2 -- 'Skipping %s: not built on %s\n' "$name" "$arch"
+        continue
+    fi
+
+    printf 1>&2 -- 'Building %s from %s\n' "$name" "$image"
+    build_one "$name" "$image" &> "${outdir}/${name}.log" &
+    pids[$name]=$!
+done < "${guests_dir}/images"
+
+if (( ${#pids[@]} == 0 )); then
+    echo 1>&2 "No guests to build"
+    exit 1
+fi
+
+failed=()
+
+for name in "${!pids[@]}"; do
+    if wait "${pids[$name]}"; then
+        group_start "${name}: OK"
+    else
+        group_start "${name}: FAILED"
+        failed+=("$name")
+    fi
+
+    cat "${outdir}/${name}.log"
+    rm -f "${outdir}/${name}.log"
+    group_end
+done
+
+if (( ${#failed[@]} > 0 )); then
+    printf 1>&2 -- 'Failed to build: %s\n' "${failed[*]}"
+    exit 1
+fi
